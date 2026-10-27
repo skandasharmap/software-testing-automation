@@ -1,0 +1,4 @@
+ID,Risk,Impact,Likelihood,Mitigation
+R-01,DB file corruption,Medium,Low,Backups; switch to Postgres for prod
+R-02,JWT leak,High,Low,Rotate secrets; TLS; short expiry
+R-03,Stock race condition,High,Medium,Use DB transactions/locks; tests

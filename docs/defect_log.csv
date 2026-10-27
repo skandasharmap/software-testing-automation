@@ -1,0 +1,3 @@
+ID,Title,Severity,Status,Notes
+BUG-01,Reserve allowed qty=0,High,Closed,Validation added
+BUG-02,/me accepted non-bearer header,Medium,Closed,Header check added

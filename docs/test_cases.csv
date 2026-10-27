@@ -1,0 +1,10 @@
+ID,Feature,Steps,Expected,Priority
+TC-AUTH-001,Register,POST /register valid,201 + token,High
+TC-AUTH-002,Register Duplicate,POST /register same email,400,High
+TC-AUTH-003,Login,POST /login valid creds,200 token,High
+TC-AUTH-004,Me Unauthorized,GET /me without token,401,High
+TC-PROD-001,Create Product,POST /products,201 product,High
+TC-PROD-002,Get Not Found,GET /products/9999,404,Medium
+TC-PROD-003,Reserve Happy Path,POST /products/{id}/reserve?qty=2,200 stock reduced,High
+TC-PROD-004,Reserve Conflict,qty>stock,409,High
+TC-PROD-005,Release,POST /products/{id}/release?qty=1,200 stock increased,Medium

@@ -1,0 +1,5 @@
+ReqID,Requirement,TestCases
+REQ-A1,User can register,"TC-AUTH-001, TC-AUTH-002"
+REQ-A2,User can login & access profile,"TC-AUTH-003, TC-AUTH-004"
+REQ-P1,Create & read products,"TC-PROD-001, TC-PROD-002"
+REQ-P2,Reserve & release stock safely,"TC-PROD-003, TC-PROD-004, TC-PROD-005"
