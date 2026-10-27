@@ -1,23 +1,29 @@
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, Float, Integer, String, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Float, Integer, String, create_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 app = FastAPI(title="Product Service", version="1.0")
 
 engine = create_engine(
-    "sqlite:///product.db", connect_args={"check_same_thread": False}
+    "sqlite:///product.db",
+    connect_args={"check_same_thread": False},
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-Base = declarative_base()
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class Product(Base):
     __tablename__ = "products"
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-    price = Column(Float, nullable=False)
-    stock = Column(Integer, nullable=False, default=0)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    stock: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 Base.metadata.create_all(engine)
@@ -48,8 +54,12 @@ def create_product(p: ProductIn):
         db.add(prod)
         db.commit()
         db.refresh(prod)
+
         return ProductOut(
-            id=prod.id, name=prod.name, price=prod.price, stock=prod.stock
+            id=prod.id,
+            name=prod.name,
+            price=prod.price,
+            stock=prod.stock,
         )
 
 
@@ -58,9 +68,13 @@ def get_product(pid: int):
     with SessionLocal() as db:
         prod = db.get(Product, pid)
         if not prod:
-            raise HTTPException(404, "Not found")
+            raise HTTPException(status_code=404, detail="Not found")
+
         return ProductOut(
-            id=prod.id, name=prod.name, price=prod.price, stock=prod.stock
+            id=prod.id,
+            name=prod.name,
+            price=prod.price,
+            stock=prod.stock,
         )
 
 
@@ -69,46 +83,64 @@ def update_product(pid: int, p: ProductIn):
     with SessionLocal() as db:
         prod = db.get(Product, pid)
         if not prod:
-            raise HTTPException(404, "Not found")
+            raise HTTPException(status_code=404, detail="Not found")
+
         prod.name = p.name
         prod.price = p.price
         prod.stock = p.stock
+
         db.commit()
         db.refresh(prod)
+
         return ProductOut(
-            id=prod.id, name=prod.name, price=prod.price, stock=prod.stock
+            id=prod.id,
+            name=prod.name,
+            price=prod.price,
+            stock=prod.stock,
         )
 
 
 @app.post("/products/{pid}/reserve", response_model=ProductOut)
 def reserve_stock(pid: int, qty: int = 1):
     if qty <= 0:
-        raise HTTPException(400, "qty must be > 0")
+        raise HTTPException(status_code=400, detail="qty must be > 0")
+
     with SessionLocal() as db:
         prod = db.get(Product, pid)
         if not prod:
-            raise HTTPException(404, "Not found")
+            raise HTTPException(status_code=404, detail="Not found")
         if prod.stock < qty:
-            raise HTTPException(409, "Insufficient stock")
+            raise HTTPException(status_code=409, detail="Insufficient stock")
+
         prod.stock -= qty
         db.commit()
         db.refresh(prod)
+
         return ProductOut(
-            id=prod.id, name=prod.name, price=prod.price, stock=prod.stock
+            id=prod.id,
+            name=prod.name,
+            price=prod.price,
+            stock=prod.stock,
         )
 
 
 @app.post("/products/{pid}/release", response_model=ProductOut)
 def release_stock(pid: int, qty: int = 1):
     if qty <= 0:
-        raise HTTPException(400, "qty must be > 0")
+        raise HTTPException(status_code=400, detail="qty must be > 0")
+
     with SessionLocal() as db:
         prod = db.get(Product, pid)
         if not prod:
-            raise HTTPException(404, "Not found")
+            raise HTTPException(status_code=404, detail="Not found")
+
         prod.stock += qty
         db.commit()
         db.refresh(prod)
+
         return ProductOut(
-            id=prod.id, name=prod.name, price=prod.price, stock=prod.stock
+            id=prod.id,
+            name=prod.name,
+            price=prod.price,
+            stock=prod.stock,
         )
