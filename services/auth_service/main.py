@@ -1,28 +1,52 @@
-import hashlib
-from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI, HTTPException
+import hashlib
+import os
+from datetime import datetime, timedelta, timezone
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
-from sqlalchemy import Column, Integer, String, create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy import Integer, String, create_engine
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    sessionmaker,
+)
 
-SECRET = "change-me-in-prod"
+SECRET = os.getenv("JWT_SECRET", "change-me-in-prod")
 ALGO = "HS256"
 
 app = FastAPI(title="Auth Service", version="1.0")
 
-engine = create_engine("sqlite:///auth.db", connect_args={"check_same_thread": False})
+engine = create_engine(
+    "sqlite:///auth.db",
+    connect_args={"check_same_thread": False},
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-Base = declarative_base()
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    name = Column(String, nullable=False)
-    pwd_hash = Column(String, nullable=False)
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+    email: Mapped[str] = mapped_column(
+        String,
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    pwd_hash: Mapped[str] = mapped_column(String, nullable=False)
 
 
 Base.metadata.create_all(engine)
@@ -44,13 +68,13 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
 
 
-def hash_pwd(p: str) -> str:
-    return hashlib.sha256(p.encode()).hexdigest()
+def hash_pwd(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def create_token(sub: str) -> str:
-    exp = datetime.utcnow() + timedelta(hours=2)
-    payload = {"sub": sub, "exp": exp}
+    expiration = datetime.now(timezone.utc) + timedelta(hours=2)
+    payload = {"sub": sub, "exp": expiration}
     return jwt.encode(payload, SECRET, algorithm=ALGO)
 
 
@@ -67,35 +91,93 @@ def get_current_user(token: str, db: Session) -> User:
         payload = jwt.decode(token, SECRET, algorithms=[ALGO])
         sub = payload.get("sub")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token",
+        )
+
+    if not sub:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token subject",
+        )
+
     user = db.query(User).filter_by(email=sub).first()
+
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise HTTPException(
+            status_code=401,
+            detail="User not found",
+        )
+
     return user
 
 
 @app.post("/register", response_model=TokenOut, status_code=201)
-def register(inp: RegisterIn, db: Session = Depends(get_db)):
-    if db.query(User).filter_by(email=inp.email).first():
-        raise HTTPException(400, "User exists")
-    u = User(email=inp.email, name=inp.name, pwd_hash=hash_pwd(inp.password))
-    db.add(u)
+def register(
+    inp: RegisterIn,
+    db: Session = Depends(get_db),
+):
+    existing_user = db.query(User).filter_by(email=inp.email).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="User exists",
+        )
+
+    user = User(
+        email=inp.email,
+        name=inp.name,
+        pwd_hash=hash_pwd(inp.password),
+    )
+
+    db.add(user)
     db.commit()
-    return TokenOut(access_token=create_token(u.email))
+    db.refresh(user)
+
+    return TokenOut(access_token=create_token(user.email))
 
 
 @app.post("/login", response_model=TokenOut)
-def login(inp: LoginIn, db: Session = Depends(get_db)):
-    u = db.query(User).filter_by(email=inp.email).first()
-    if not u or u.pwd_hash != hash_pwd(inp.password):
-        raise HTTPException(401, "Invalid credentials")
-    return TokenOut(access_token=create_token(u.email))
+def login(
+    inp: LoginIn,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter_by(email=inp.email).first()
+
+    if not user or user.pwd_hash != hash_pwd(inp.password):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+        )
+
+    return TokenOut(access_token=create_token(user.email))
 
 
 @app.get("/me")
-def me(authorization: str, db: Session = Depends(get_db)):
-    if not authorization.lower().startswith("bearer "):
-        raise HTTPException(401, "Missing bearer")
-    token = authorization.split(" ", 1)[1]
-    u = get_current_user(token, db)
-    return {"email": u.email, "name": u.name, "id": u.id}
+def me(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing bearer",
+        )
+
+    token = authorization.split(" ", 1)[1].strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing bearer token",
+        )
+
+    user = get_current_user(token, db)
+
+    return {
+        "email": user.email,
+        "name": user.name,
+        "id": user.id,
+    }
