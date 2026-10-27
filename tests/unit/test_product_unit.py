@@ -1,5 +1,7 @@
-from services.product_service.main import ProductIn
 import pytest
+
+from services.product_service.main import ProductIn
+
 
 def test_product_validation():
     p = ProductIn(name="Pen", price=10.0, stock=5)
